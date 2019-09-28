@@ -1,0 +1,97 @@
+GET http://localhost:8083/connectors
+
+###
+
+GET http://localhost:8083/connectors/pg-source-raw/config
+
+###
+
+POST http://localhost:8083/connectors
+Content-Type: application/json
+
+    
+{
+    "name": "pg-source-raw-6",
+    "config": {
+        "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+        "tasks.max": "1",
+        "database.hostname": "postgres",
+        "database.port": "5432",
+        "database.user": "postgres",
+        "database.password": "postgres",
+        "database.dbname" : "events_db",
+        "database.server.name": "postgres",
+        "database.history.kafka.bootstrap.servers": "broker:29092",
+        "database.history.kafka.topic": "pg-topic",
+        "transforms": "unwrap, changeKey, extractKey",
+        "transforms.unwrap.type":"io.debezium.transforms.UnwrapFromEnvelope",
+        "transforms.unwrap.drop.tombstones":"true",
+        "transforms.changeKey.type": "org.apache.kafka.connect.transforms.ValueToKey",
+        "transforms.changeKey.fields": "stream_id",
+        "transforms.extractKey.type":"org.apache.kafka.connect.transforms.ExtractField$Key",
+        "transforms.extractKey.field":"stream_id", 
+        "include.schema.changes": "false",
+        "table.whitelist" : "public.mt_events"
+    }
+}
+
+###
+
+DELETE http://localhost:8083/connectors/pg-source-raw-5
+
+###
+
+GET http://localhost:8083/connectors
+
+> {% client.global.set("debezium-outbox_id", "debezium-outbox-6"); %}
+
+###
+
+POST http://localhost:8083/connectors
+Content-Type: application/json
+
+    
+{
+    "name": "{{debezium-outbox_id}}",
+    "config": {
+        "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+        "tasks.max": "1",
+        "database.hostname": "postgres",
+        "database.port": "5432",
+        "database.user": "postgres",
+        "database.password": "postgres",
+        "database.dbname" : "events_db",
+        "database.server.name": "postgres",
+        "database.history.kafka.bootstrap.servers": "broker:29092",
+        "database.history.kafka.topic": "pg-topic",
+        "include.schema.changes": "false",
+        "table.whitelist" : "public.mt_events",
+        "tombstones.on.delete" : "false",
+        "transforms": "outbox",
+        "transforms.outbox.type": "io.debezium.transforms.outbox.EventRouter",
+        "transforms.outbox.route.by.field": "tenant_id",
+        "transforms.outbox.table.field.event.id": "id",
+        "transforms.outbox.table.field.event.key": "stream_id",
+        "transforms.outbox.table.field.event.type": "type",
+        "transforms.outbox.table.field.event.payload": "data",
+        "transforms.outbox.table.field.event.payload.id": "stream_id",
+        "transforms.outbox.route.topic.replacement": "mt_events",
+        "transforms.outbox.route.table.field.event.timestamp" : "timestamp",
+        "transforms.outbox.table.fields.additional.placement" : "seq_id:envelope:SeqId,mt_dotnet_type:envelope:FullDotNetType"
+    }
+}
+
+###
+
+DELETE http://localhost:8083/connectors/{{debezium-outbox_id}}
+
+###
+
+DELETE http://localhost:8081/subjects/postgres.public.mt_streams-value
+
+###
+
+GET http://localhost:8081/subjects
+
+###
+GET http://localhost:8082/topics
